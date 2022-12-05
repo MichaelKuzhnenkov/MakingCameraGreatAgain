@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout
+<RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    tools:context=".MainActivity"
+    android:id="@+id/main_activity_layout">
 
     <FrameLayout
         android:id="@+id/camera_layout"
@@ -18,8 +19,9 @@
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:background="@drawable/ic_circle"
-        app:layout_anchor="@+id/camera_layout"
-        app:layout_anchorGravity="bottom|center"
+
+        android:layout_alignParentBottom="true"
+        android:gravity="center_horizontal"
         android:layout_marginBottom="32dp"/>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</RelativeLayout>

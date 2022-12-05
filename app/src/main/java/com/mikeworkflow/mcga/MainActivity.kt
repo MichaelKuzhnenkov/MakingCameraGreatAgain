@@ -9,6 +9,7 @@ import android.util.DisplayMetrics
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.widget.FrameLayout
+import android.widget.RelativeLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.gun0912.tedpermission.PermissionListener
@@ -21,6 +22,7 @@ class MainActivity : AppCompatActivity(), PermissionListener {
     private lateinit var mCamera: Camera
     private lateinit var mCameraLayout: FrameLayout
     private lateinit var mCameraPreview: CameraPreview
+    private var mPreviewSize : Camera.Size? = null
 
     override fun onPermissionGranted() {
         initCameraPreview()
@@ -48,6 +50,11 @@ class MainActivity : AppCompatActivity(), PermissionListener {
             initCameraPreview()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        mPreviewSize = null
+    }
+
     private fun initCameraPreview() {
         try {
             mCamera = getCameraInstance()
@@ -69,7 +76,9 @@ class MainActivity : AppCompatActivity(), PermissionListener {
 
     public fun setupCameraLayout(width: Int, height: Int) {
         var params = mCameraLayout.layoutParams
+//        if (width > height)
         params.height = height
+//        else
         params.width = width
         mCameraLayout.layoutParams = params
     }
@@ -79,7 +88,7 @@ class MainActivity : AppCompatActivity(), PermissionListener {
         private var mCamera: Camera = camera
         private var mHolder = holder
         private var mSupportedPreviewSizes = camera.parameters.supportedPreviewSizes
-        private lateinit var mPreviewSize: Camera.Size
+//        private lateinit var mPreviewSize: Camera.Size
         private val mainActivity = mainActivity
 
         init {
@@ -111,11 +120,14 @@ class MainActivity : AppCompatActivity(), PermissionListener {
                     }
                 })
                 mCamera.parameters.focusMode = Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO
-                mCamera.parameters.previewSize.height = mPreviewSize.height
-                mCamera.parameters.previewSize.width = mPreviewSize.width
+                mCamera.parameters.previewSize.height = mainActivity.mPreviewSize!!.height
+                mCamera.parameters.previewSize.width = mainActivity.mPreviewSize!!.width
                 mCamera.parameters.zoom = 0
                 mCamera.setPreviewDisplay(mHolder)
-                mainActivity.setupCameraLayout(mPreviewSize.width, mPreviewSize.height)
+                val height = resources.displayMetrics.heightPixels
+                val width = resources.displayMetrics.widthPixels
+                if (height > width)
+                    mCamera.setDisplayOrientation(90)
                 mCamera.startPreview()
 
             } catch (e: Exception) {
@@ -125,34 +137,78 @@ class MainActivity : AppCompatActivity(), PermissionListener {
         override fun surfaceDestroyed(holder: SurfaceHolder) {}
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val dm : DisplayMetrics = resources.displayMetrics
-            val width = dm.widthPixels.toDouble()
-            val height = dm.heightPixels.toDouble()
+            if (mainActivity.mPreviewSize == null) {
+                val dm: DisplayMetrics = resources.displayMetrics
+                var width = dm.widthPixels.toDouble()
+                var height = dm.heightPixels.toDouble()
+                val cl: RelativeLayout =
+                    mainActivity.findViewById(R.id.main_activity_layout) as RelativeLayout
+                if (cl.measuredHeight > height)
+                    height = cl.measuredHeight.toDouble()
+                if (cl.measuredWidth > width)
+                    width = cl.measuredWidth.toDouble()
+//            val parentH = cl.measuredHeight
+//            val parentW = cl.measuredWidth
+                if (mSupportedPreviewSizes == null) return
 
-            if (mSupportedPreviewSizes == null) return
+                var optimalSize: Camera.Size? = null
+                var deltaH: Double = Double.MAX_VALUE
+                var deltaW: Double = Double.MAX_VALUE
+                for (size in mSupportedPreviewSizes) {
+                    if (height > width) {
+                        if (height - size.width < deltaW && width - size.height < deltaH) {
+                            optimalSize = size
+                            deltaW = height - size.width
+                            deltaH = width - size.height
+                        }
+                    } else
+                        if (width - size.width < deltaW && height - size.height < deltaH) {
+                            optimalSize = size
+                            deltaW = width - size.width
+                            deltaH = height - size.height
 
-            var optimalSize: Camera.Size? = null
-            var deltaH : Double = Double.MAX_VALUE
-            var deltaW: Double = Double.MAX_VALUE
-            for (size in mSupportedPreviewSizes) {
-                if (width - size.width < deltaW && height - size.height < deltaH) {
-                    optimalSize = size
-                    deltaW = width - size.width
-                    deltaH = height - size.height
-
+                        }
                 }
-            }
-            mPreviewSize = optimalSize!!
-            if (deltaH>deltaW) {
-                mPreviewSize.height = height.toInt()
-                mPreviewSize.width = (width * height/mPreviewSize.height).toInt()
-            } else {
-                mPreviewSize.height = (height * width / mPreviewSize.width).toInt()
-                mPreviewSize.width = width.toInt()
-            }
+                mainActivity.mPreviewSize = optimalSize!!
+                if (height > width) {
+                    if (deltaH > deltaW) {
+                        mainActivity.mPreviewSize!!.width = width.toInt()
+                        mainActivity.mPreviewSize!!.height =
+                            (height * width / mainActivity.mPreviewSize!!.height).toInt()
+                    } else {
+                        mainActivity.mPreviewSize!!.width =
+                            (width * height / mainActivity.mPreviewSize!!.width).toInt()
+                        mainActivity.mPreviewSize!!.height = height.toInt()
+                    }
+                    setMeasuredDimension(
+                        mainActivity.mPreviewSize!!.width,
+                        mainActivity.mPreviewSize!!.height
+                    )
+                } else {
+                    if (deltaH > deltaW) {
+                        mainActivity.mPreviewSize!!.height = height.toInt()
+                        mainActivity.mPreviewSize!!.width =
+                            (width * height / mainActivity.mPreviewSize!!.height).toInt()
+                    } else {
+                        mainActivity.mPreviewSize!!.height =
+                            (height * width / mainActivity.mPreviewSize!!.width).toInt()
+                        mainActivity.mPreviewSize!!.width = width.toInt()
+                    }
+                    setMeasuredDimension(
+                        mainActivity.mPreviewSize!!.width,
+                        mainActivity.mPreviewSize!!.height
+                    )
+                }
 
-            setMeasuredDimension(mPreviewSize.width, mPreviewSize.height)
-
+                mainActivity.setupCameraLayout(
+                    mainActivity.mPreviewSize!!.width,
+                    mainActivity.mPreviewSize!!.height
+                )
+            } else
+                setMeasuredDimension(
+                    mainActivity.mPreviewSize!!.width,
+                    mainActivity.mPreviewSize!!.height
+                )
         }
     }
 }
