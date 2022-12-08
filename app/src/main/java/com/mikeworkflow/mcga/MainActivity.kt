@@ -28,25 +28,23 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListener {
 
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var mCamera: Camera
-    private lateinit var mCameraLayout: FrameLayout
-    private lateinit var mCameraPreview: CameraPreview
-    private lateinit var mShootButton : TextView
-    private var mPreviewSize : Camera.Size? = null
-    private lateinit var mGalleryThumbnail : ImageView
-    override fun onPermissionGranted() {
-        initCameraPreview()
-    }
-
-    override fun onPermissionDenied(deniedPermissions: MutableList<String>?) {
-    }
+    var portrait = false
+    var landscape = false
+    var mPreviewSize : Camera.Size? = null
+    lateinit var binding: ActivityMainBinding
+    lateinit var mCamera: Camera
+    lateinit var mCameraLayout: FrameLayout
+    lateinit var mCameraPreview: CameraPreview
+    lateinit var mShootButton : TextView
+    lateinit var mGalleryThumbnail : ImageView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         mCameraLayout = binding.cameraLayout
         mShootButton = binding.shoot
@@ -92,27 +90,6 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
         mCamera.release()
     }
 
-    private fun initGalleryThumbnail() {
-        var bmp: Bitmap
-            try {
-                thread {
-                    bmp = getImageForThumb()
-                    runOnUiThread { mGalleryThumbnail.setImageBitmap(bmp) }
-                }
-            } catch (e : NoSuchFileException) {
-                e.printStackTrace()
-            }
-    }
-
-    fun getImageForThumb() : Bitmap {
-        var file = externalMediaDirs.get(0).listFiles()[externalMediaDirs.get(0).listFiles().size-1]
-        if (!file.exists())
-            throw NoSuchFileException(file)
-        var bitmap = BitmapFactory.decodeFile(file.absolutePath)
-        //if (bitmap.width>bitmap.height)
-        return bitmap
-    }
-
     private fun initCameraPreview() {
         try {
             mCamera = getCameraInstance()!!
@@ -120,7 +97,6 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
             mCameraLayout.addView(mCameraPreview)
         } catch (e: Exception) {
         }
-
     }
 
     private fun getCameraInstance(): Camera? {
@@ -131,41 +107,13 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
         }
         return null
     }
-    private val pictureCallback = Camera.PictureCallback(function = { bytes: ByteArray, camera: Camera ->
-        var bmpImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        if (portrait) {
-            val matrix = Matrix()
-            matrix.postRotate(90F)
-            bmpImage = Bitmap.createBitmap(
-                bmpImage, 0, 0, mCameraPreview.width * bmpImage.height / mCameraPreview.height,
-                bmpImage.height, matrix, true
-            )
-
-        } else
-            bmpImage = Bitmap.createBitmap(
-                bmpImage, 0, 0, bmpImage.width,
-                mCameraPreview.width * bmpImage.width / mCameraPreview.width, null, true
-            )
-
-
-        var outStream = ByteArrayOutputStream()
-        bmpImage.compress(Bitmap.CompressFormat.JPEG, 100, outStream)
-        var imageFile = File(externalMediaDirs.get(0).absolutePath)
-        if (!imageFile.exists())
-            imageFile.mkdirs()
-        var fo = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile))
-        fo.write(outStream.toByteArray())
-        fo.close()
-        mCamera.startPreview()
-        initGalleryThumbnail()
-    })
-
 
     fun setupCameraLayout(width: Int, height: Int, display: Display) {
         val params = mCameraLayout.layoutParams
         params.height = height
         params.width = width
         mCameraLayout.layoutParams = params
+        //todo: implement buttons rotation when they'll appear in project
         val btnParams = mShootButton.layoutParams as RelativeLayout.LayoutParams
         when(display.rotation) {
             //rotate interface icons
@@ -175,121 +123,66 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 //            3 -> btnParams.addRule(RelativeLayout.ALIGN_PARENT_START)
         }
         mShootButton.layoutParams = btnParams
-
     }
 
-    class CameraPreview(context: Context, camera: Camera, mainActivity: MainActivity) : SurfaceView(context),
-        SurfaceHolder.Callback {
-        private var mCamera: Camera = camera
-        private var mHolder = holder
-        private var mSupportedPreviewSizes = camera.parameters.supportedPreviewSizes
-        private val mainActivity = mainActivity
+    private val pictureCallback = Camera.PictureCallback(function = { bytes: ByteArray, camera: Camera ->
+        thread {
+            var bmpImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 
-        init {
-            mHolder.addCallback(this)
-            mHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS)
+            if (portrait) {
+                val matrix = Matrix()
+                matrix.postRotate(90F)
+                bmpImage = Bitmap.createBitmap(
+                    bmpImage, 0, 0, mCameraPreview.width * bmpImage.height / mCameraPreview.height,
+                    bmpImage.height, matrix, true
+                )
+            } else
+                bmpImage = Bitmap.createBitmap(
+                    bmpImage, 0, 0, bmpImage.width,
+                    mCameraPreview.width * bmpImage.width / mCameraPreview.width, null, true
+                )
+
+            var outStream = ByteArrayOutputStream()
+            bmpImage.compress(Bitmap.CompressFormat.JPEG, 100, outStream)
+            var imageFile = File(externalMediaDirs.get(0).absolutePath)
+            if (!imageFile.exists())
+                imageFile.mkdirs()
+            var fo = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile))
+            fo.write(outStream.toByteArray())
+            fo.close()
+            mCamera.startPreview()
+            initGalleryThumbnail()
         }
+    })
 
-
-        override fun surfaceCreated(holder: SurfaceHolder) {
-            try {
-                mCamera.setPreviewDisplay(holder)
-                mCamera.startPreview()
-            } catch (e: Exception) {
+    private fun initGalleryThumbnail() {
+        var bmp: Bitmap
+        try {
+            thread {
+                bmp = getImageForThumb()
+                runOnUiThread { mGalleryThumbnail.setImageBitmap(bmp) }
             }
-        }
-
-        override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-            if (mHolder.surface == null)
-                return
-            try {
-                mCamera.stopPreview()
-            } catch (e: Exception) {
-            }
-
-            try {
-                mCamera.parameters.focusMode = Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO
-                mCamera.parameters.previewSize.width = mainActivity.mPreviewSize!!.width
-                mCamera.parameters.previewSize.height = mainActivity.mPreviewSize!!.height
-                mCamera.parameters.zoom = 0
-                mCamera.parameters.pictureSize.width = mainActivity.mPreviewSize!!.width
-                mCamera.parameters.pictureSize.height = mainActivity.mPreviewSize!!.height
-                mCamera.parameters.jpegQuality = 100
-                mCamera.parameters.jpegThumbnailQuality = 100
-
-//                mCamera.parameters.
-                mCamera.setPreviewDisplay(mHolder)
-                mCamera.setDisplayOrientation(90)
-                mCamera.startPreview()
-
-            } catch (e: Exception) {
-            }
-        }
-
-        override fun surfaceDestroyed(holder: SurfaceHolder) {}
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-
-            val dm: DisplayMetrics = resources.displayMetrics
-            var width = dm.widthPixels.toDouble()
-            var height = dm.heightPixels.toDouble()
-            val cl: RelativeLayout =
-                mainActivity.findViewById(R.id.main_activity_layout) as RelativeLayout
-            if (cl.measuredHeight > height)
-                height = cl.measuredHeight.toDouble()
-            if (cl.measuredWidth > width)
-                width = cl.measuredWidth.toDouble()
-            if (mSupportedPreviewSizes == null) return
-
-            if (mainActivity.mPreviewSize == null) {
-                var optimalSize: Camera.Size? = null
-                var deltaH: Double = Double.MAX_VALUE
-                var deltaW: Double = Double.MAX_VALUE
-                for (size in mSupportedPreviewSizes)
-                    if (height - size.width < deltaW && width - size.height < deltaH) {
-                        optimalSize = size
-                        deltaW = height - size.width
-                        deltaH = width - size.height
-                    }
-                mainActivity.mPreviewSize = optimalSize!!
-
-                if (deltaH > deltaW) {
-                    mainActivity.mPreviewSize!!.width = width.toInt()
-                    mainActivity.mPreviewSize!!.height =
-                        (height * width / mainActivity.mPreviewSize!!.height).toInt()
-                } else {
-                    mainActivity.mPreviewSize!!.width =
-                        (width * height / mainActivity.mPreviewSize!!.width).toInt()
-                    mainActivity.mPreviewSize!!.height = height.toInt()
-                }
-
-
-            } else if (height > mainActivity.mPreviewSize!!.height) {
-                mainActivity.mPreviewSize!!.height = height.toInt()
-                mainActivity.mPreviewSize!!.width = (mainActivity.mPreviewSize!!.width * (height/mainActivity.mPreviewSize!!.height)).toInt()
-            }
-            setMeasuredDimension(
-                mainActivity.mPreviewSize!!.width,
-                mainActivity.mPreviewSize!!.height)
-
-            mainActivity.setupCameraLayout(
-                mainActivity.mPreviewSize!!.width,
-                mainActivity.mPreviewSize!!.height,
-                display
-            )
+        } catch (e : NoSuchFileException) {
+            e.printStackTrace()
         }
     }
 
-    var portraitPitch = false
-    var landscapePitch = false
-    var portraitRoll = false
-    var landscapeRoll = false
-    var portrait = false
-    var landscape = false
+    fun getImageForThumb() : Bitmap {
+        var file = externalMediaDirs.get(0).listFiles()[externalMediaDirs.get(0).listFiles().size-1]
+        if (!file.exists())
+            throw NoSuchFileException(file)
+        var bitmap = BitmapFactory.decodeFile(file.absolutePath)
+        return bitmap
+    }
 
+    //thanks to stackoverflown for realisation
+    //todo: inspect calculations
     override fun onSensorChanged(event: SensorEvent?) {
         val values = event!!.values
-
+        var portraitPitch = false
+        var landscapePitch = false
+        var portraitRoll = false
+        var landscapeRoll = false
         // Movement
         val azimuth = values[0]
         val pitch = values[1]
@@ -330,6 +223,13 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
 
+    }
+
+    override fun onPermissionGranted() {
+        initCameraPreview()
+    }
+
+    override fun onPermissionDenied(deniedPermissions: MutableList<String>?) {
     }
 
 }
