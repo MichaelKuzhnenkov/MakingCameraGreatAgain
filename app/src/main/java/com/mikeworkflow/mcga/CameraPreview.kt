@@ -9,6 +9,7 @@ import android.widget.RelativeLayout
 
 class CameraPreview(context: Context, camera: Camera, private val mainActivity: MainActivity) : SurfaceView(context),
     SurfaceHolder.Callback {
+
     private var mCamera: Camera = camera
     private var mHolder = holder
     private var mSupportedPreviewSizes = camera.parameters.supportedPreviewSizes
@@ -17,7 +18,6 @@ class CameraPreview(context: Context, camera: Camera, private val mainActivity: 
         mHolder.addCallback(this)
         mHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS)
     }
-
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         try {
@@ -100,8 +100,7 @@ class CameraPreview(context: Context, camera: Camera, private val mainActivity: 
 
         mainActivity.setupCameraLayout(
             mainActivity.mPreviewSize!!.width,
-            mainActivity.mPreviewSize!!.height,
-            display
+            mainActivity.mPreviewSize!!.height
         )
     }
 }

@@ -1,15 +1,11 @@
 package com.mikeworkflow.mcga
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.*
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -20,9 +16,11 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 
-import android.graphics.Matrix
 import android.hardware.*
+import android.hardware.Camera
 import android.view.*
+import androidx.core.graphics.drawable.RoundedBitmapDrawable
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import kotlin.concurrent.thread
 
 
@@ -30,6 +28,7 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 
     var portrait = false
     var landscape = false
+    var rotation = 0
     var mPreviewSize : Camera.Size? = null
     lateinit var binding: ActivityMainBinding
     lateinit var mCamera: Camera
@@ -41,9 +40,9 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        requestWindowFeature(Window.FEATURE_NO_TITLE)
         window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            WindowManager.LayoutParams.FLAG_FULLSCREEN)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         mCameraLayout = binding.cameraLayout
@@ -75,7 +74,7 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
         }
 
         val sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION), SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION), SensorManager.SENSOR_DELAY_NORMAL)
         orientationEventListener.enable()
     }
 
@@ -108,21 +107,11 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
         return null
     }
 
-    fun setupCameraLayout(width: Int, height: Int, display: Display) {
+    fun setupCameraLayout(width: Int, height: Int) {
         val params = mCameraLayout.layoutParams
         params.height = height
         params.width = width
         mCameraLayout.layoutParams = params
-        //todo: implement buttons rotation when they'll appear in project
-        val btnParams = mShootButton.layoutParams as RelativeLayout.LayoutParams
-        when(display.rotation) {
-            //rotate interface icons
-//            0 -> btnParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM)
-//            1 -> btnParams.addRule(RelativeLayout.ALIGN_PARENT_END)
-//            2 -> btnParams.addRule(RelativeLayout.ALIGN_PARENT_TOP)
-//            3 -> btnParams.addRule(RelativeLayout.ALIGN_PARENT_START)
-        }
-        mShootButton.layoutParams = btnParams
     }
 
     private val pictureCallback = Camera.PictureCallback(function = { bytes: ByteArray, camera: Camera ->
@@ -142,41 +131,77 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
                     mCameraPreview.width * bmpImage.width / mCameraPreview.width, null, true
                 )
 
-            var outStream = ByteArrayOutputStream()
+            val outStream = ByteArrayOutputStream()
             bmpImage.compress(Bitmap.CompressFormat.JPEG, 100, outStream)
-            var imageFile = File(externalMediaDirs.get(0).absolutePath)
+            val imageFile = File(externalMediaDirs.get(0).absolutePath)
             if (!imageFile.exists())
                 imageFile.mkdirs()
-            var fo = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile))
+            val fo = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile))
             fo.write(outStream.toByteArray())
             fo.close()
-            mCamera.startPreview()
             initGalleryThumbnail()
         }
+        mCamera.startPreview()
     })
 
     private fun initGalleryThumbnail() {
         var bmp: Bitmap
-        try {
+
             thread {
+                try {
+                //getting last made photo and make a round image from center of it
                 bmp = getImageForThumb()
-                runOnUiThread { mGalleryThumbnail.setImageBitmap(bmp) }
+                //crop an image to square
+                if (bmp.height > bmp.width)
+                    bmp = Bitmap.createBitmap(
+                        bmp, 0,
+                        (bmp.height - bmp.width) / 2, bmp.width, bmp.width,
+                        null, true
+                    )
+                else
+                    bmp = Bitmap.createBitmap(
+                        bmp, 0,
+                        (bmp.width - bmp.height) / 2, bmp.height, bmp.height,
+                        null, true
+                    )
+                //rounding it
+                val roundIcon = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(roundIcon)
+                val paint = Paint()
+                paint.isAntiAlias = true
+                val rect = Rect(0, 0, bmp.width, bmp.height)
+                canvas.drawCircle(
+                    bmp.width / 2.toFloat(),
+                    bmp.height / 2.toFloat(), bmp.width / 2.toFloat(), paint
+                )
+                paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+                canvas.drawBitmap(bmp, rect, rect, paint)
+
+                runOnUiThread { mGalleryThumbnail.setImageBitmap(roundIcon) }
+                } catch (e : Exception) {
+                    e.printStackTrace()
+                }
             }
-        } catch (e : NoSuchFileException) {
-            e.printStackTrace()
+
+    }
+
+    fun getImageForThumb(): Bitmap {
+        try {
+            val file : File
+            if (externalMediaDirs.isNotEmpty() && externalMediaDirs.get(0).listFiles().isNotEmpty()) {
+                file =
+                    externalMediaDirs.get(0).listFiles()!![externalMediaDirs.get(0)
+                        .listFiles()!!.size - 1]
+                if (!file.exists())
+                    throw NoSuchFileException(file)
+                return BitmapFactory.decodeFile(file.absolutePath)
+            }
+            else throw SecurityException()
+        } catch (e : Exception) {
+            throw Exception(e)
         }
     }
 
-    fun getImageForThumb() : Bitmap {
-        var file = externalMediaDirs.get(0).listFiles()[externalMediaDirs.get(0).listFiles().size-1]
-        if (!file.exists())
-            throw NoSuchFileException(file)
-        var bitmap = BitmapFactory.decodeFile(file.absolutePath)
-        return bitmap
-    }
-
-    //thanks to stackoverflown for realisation
-    //todo: inspect calculations
     override fun onSensorChanged(event: SensorEvent?) {
         val values = event!!.values
         var portraitPitch = false
@@ -211,14 +236,46 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
         if (portraitPitch && portraitRoll && !portrait) {
             portrait = true
             landscape = false
-            //rotateIconsToPortraitMode()
         }
 
         if (landscapePitch && landscapeRoll && !landscape) {
             landscape = true
             portrait = false
-            //rotateIconsToLandscapeMode()
         }
+
+        //on fast device 180 degree rotation there won't be switching between modes,
+        //so upper statements won't update the rotation state when in changed
+        //in that case we need more checks
+        if (portraitPitch && portraitRoll && portrait)
+            if (pitch < 0) {
+                rotateButtons(rotation, 0)
+                rotation = 0
+            }
+            else {
+                rotateButtons(rotation, 2)
+                rotation = 2
+            }
+
+        if (landscapePitch && landscapeRoll && landscape)
+            if (roll > 0) {
+                rotateButtons(rotation, 1)
+                rotation = 1
+            }
+            else {
+                rotateButtons(rotation, 3)
+                rotation = 3
+            }
+    }
+
+    private fun rotateButtons(previous : Int, current : Int) {
+        if (previous == current) return
+
+        if (previous == 3 && current == 0)
+            mGalleryThumbnail.animate().rotation(360F).withEndAction { mGalleryThumbnail.rotation = 0F }.start()
+        else if (previous == 0 && current == 3)
+            mGalleryThumbnail.animate().rotation(-90F).withEndAction { mGalleryThumbnail.rotation = 270F }.start()
+        else
+            mGalleryThumbnail.animate().rotation(current*90F).start()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
