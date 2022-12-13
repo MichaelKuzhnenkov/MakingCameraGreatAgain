@@ -19,6 +19,7 @@ import java.io.FileOutputStream
 import android.hardware.*
 import android.hardware.Camera
 import android.view.*
+import androidx.core.app.ActivityCompat
 import androidx.core.graphics.drawable.RoundedBitmapDrawable
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import kotlin.concurrent.thread
@@ -31,7 +32,7 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     var rotation = 0
     var mPreviewSize : Camera.Size? = null
     lateinit var binding: ActivityMainBinding
-    lateinit var mCamera: Camera
+    var mCamera: Camera? = null
     lateinit var mCameraLayout: FrameLayout
     lateinit var mCameraPreview: CameraPreview
     lateinit var mShootButton : TextView
@@ -52,7 +53,7 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 
         initGalleryThumbnail()
         mShootButton.setOnClickListener { v ->
-            mCamera.takePicture(null, null, pictureCallback)
+            mCamera!!.takePicture(null, null, pictureCallback)
         }
 
         if (ContextCompat.checkSelfPermission(
@@ -63,11 +64,18 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
             TedPermission.with(this)
                 .setPermissionListener(this)
                 .setPermissions(Manifest.permission.CAMERA)
+                .check()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED)
+            TedPermission.with(this)
+                .setPermissionListener(this)
                 .setPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
+                .check()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED)
+            TedPermission.with(this)
+                .setPermissionListener(this)
                 .setPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 .check()
-        else
-            initCameraPreview()
 
         val orientationEventListener = object : OrientationEventListener(this) {
             override fun onOrientationChanged(orientation: Int) {}
@@ -80,20 +88,28 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 
     override fun onResume() {
         super.onResume()
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
         initCameraPreview()
     }
 
     override fun onPause() {
         super.onPause()
         mPreviewSize = null
-        mCamera.release()
+        if (mCamera != null)
+            mCamera!!.release()
     }
 
     private fun initCameraPreview() {
         try {
-            mCamera = getCameraInstance()!!
-            mCameraPreview = CameraPreview(this, mCamera, this)
-            mCameraLayout.addView(mCameraPreview)
+            mCamera = getCameraInstance()
+            if (mCamera != null) {
+                mCameraPreview = CameraPreview(this, mCamera!!, this)
+                mCameraLayout.addView(mCameraPreview)
+            }
         } catch (e: Exception) {
         }
     }
@@ -117,18 +133,23 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     private val pictureCallback = Camera.PictureCallback(function = { bytes: ByteArray, camera: Camera ->
         thread {
             var bmpImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-
+            var bmpImage1 = bmpImage
             if (portrait) {
                 val matrix = Matrix()
                 matrix.postRotate(90F)
+
                 bmpImage = Bitmap.createBitmap(
-                    bmpImage, 0, 0, mCameraPreview.width * bmpImage.height / mCameraPreview.height,
+                    bmpImage, 0, 0, bmpImage.width,
                     bmpImage.height, matrix, true
+                )
+                bmpImage1 = Bitmap.createBitmap(
+                    bmpImage, (bmpImage.width - (mCameraPreview.width * bmpImage.height / mCameraPreview.height))/2, 0, mCameraPreview.width * bmpImage.height / mCameraPreview.height,
+                    bmpImage.height, null, true
                 )
             } else
                 bmpImage = Bitmap.createBitmap(
-                    bmpImage, 0, 0, bmpImage.width,
-                    mCameraPreview.width * bmpImage.width / mCameraPreview.width, null, true
+                    bmpImage, 0, bmpImage.height - (mCameraPreview.width * bmpImage.width / mCameraPreview.height), bmpImage.width,
+                    mCameraPreview.width * bmpImage.width / mCameraPreview.height, null, true
                 )
 
             val outStream = ByteArrayOutputStream()
@@ -139,9 +160,18 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
             val fo = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile))
             fo.write(outStream.toByteArray())
             fo.close()
+            val outStream1 = ByteArrayOutputStream()
+            bmpImage1.compress(Bitmap.CompressFormat.JPEG, 100, outStream1)
+            val imageFile1 = File(externalMediaDirs.get(0).absolutePath)
+            if (!imageFile1.exists())
+                imageFile1.mkdirs()
+            val fo1 = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile1))
+            fo1.write(outStream1.toByteArray())
+            fo1.close()
+
             initGalleryThumbnail()
         }
-        mCamera.startPreview()
+        mCamera!!.startPreview()
     })
 
     private fun initGalleryThumbnail() {
@@ -160,8 +190,8 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
                     )
                 else
                     bmp = Bitmap.createBitmap(
-                        bmp, 0,
-                        (bmp.width - bmp.height) / 2, bmp.height, bmp.height,
+                        bmp, (bmp.width - bmp.height) / 2,
+                        0, bmp.height, bmp.height,
                         null, true
                     )
                 //rounding it
@@ -283,7 +313,12 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     }
 
     override fun onPermissionGranted() {
-        initCameraPreview()
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+            initCameraPreview()
     }
 
     override fun onPermissionDenied(deniedPermissions: MutableList<String>?) {
