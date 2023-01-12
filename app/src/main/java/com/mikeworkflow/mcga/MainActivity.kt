@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.os.Bundle
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.gun0912.tedpermission.PermissionListener
@@ -19,6 +16,7 @@ import java.io.FileOutputStream
 import android.hardware.*
 import android.hardware.Camera
 import android.view.*
+import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.core.graphics.drawable.RoundedBitmapDrawable
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
@@ -30,13 +28,15 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     var portrait = false
     var landscape = false
     var rotation = 0
-    var mPreviewSize : Camera.Size? = null
     lateinit var binding: ActivityMainBinding
     var mCamera: Camera? = null
     lateinit var mCameraLayout: FrameLayout
     lateinit var mCameraPreview: CameraPreview
     lateinit var mShootButton : TextView
     lateinit var mGalleryThumbnail : ImageView
+    lateinit var mChangeRatioList : ExpandableListView
+    lateinit var ratioListAdapter : CustomExpandableListAdapter
+    var selectedRatio : String = RatioValues.WIDESCREEN.ratio
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,33 +49,17 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
         mCameraLayout = binding.cameraLayout
         mShootButton = binding.shoot
         mGalleryThumbnail = binding.galleryThumb
+        mChangeRatioList = binding.changeRatioList
         setContentView(binding.root)
 
-        initGalleryThumbnail()
         mShootButton.setOnClickListener { v ->
             mCamera!!.takePicture(null, null, pictureCallback)
         }
+        initRatioAdapter(RatioValues.WIDESCREEN.ratio)
+        mChangeRatioList.setOnChildClickListener(expandableListChildClickListener)
 
-        if (ContextCompat.checkSelfPermission(
-                this,
-                CAMERA_SERVICE
-            ) == PackageManager.PERMISSION_DENIED
-        )
-            TedPermission.with(this)
-                .setPermissionListener(this)
-                .setPermissions(Manifest.permission.CAMERA)
-                .check()
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED)
-            TedPermission.with(this)
-                .setPermissionListener(this)
-                .setPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
-                .check()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED)
-            TedPermission.with(this)
-                .setPermissionListener(this)
-                .setPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                .check()
+        checkPermissionsGranted()
+        initGalleryThumbnail()
 
         val orientationEventListener = object : OrientationEventListener(this) {
             override fun onOrientationChanged(orientation: Int) {}
@@ -98,7 +82,6 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 
     override fun onPause() {
         super.onPause()
-        mPreviewSize = null
         if (mCamera != null)
             mCamera!!.release()
     }
@@ -124,16 +107,16 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     }
 
     fun setupCameraLayout(width: Int, height: Int) {
-        val params = mCameraLayout.layoutParams
-        params.height = height
-        params.width = width
-        mCameraLayout.layoutParams = params
+
+//        var params = mCameraLayout.layoutParams
+//        params.height = height
+//        params.width = width
+        //mCameraLayout.layoutParams = params
     }
 
     private val pictureCallback = Camera.PictureCallback(function = { bytes: ByteArray, camera: Camera ->
         thread {
             var bmpImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            var bmpImage1 = bmpImage
             if (portrait) {
                 val matrix = Matrix()
                 matrix.postRotate(90F)
@@ -142,14 +125,14 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
                     bmpImage, 0, 0, bmpImage.width,
                     bmpImage.height, matrix, true
                 )
-                bmpImage1 = Bitmap.createBitmap(
-                    bmpImage, (bmpImage.width - (mCameraPreview.width * bmpImage.height / mCameraPreview.height))/2, 0, mCameraPreview.width * bmpImage.height / mCameraPreview.height,
-                    bmpImage.height, null, true
-                )
             } else
+//                bmpImage = Bitmap.createBitmap(
+//                    bmpImage, 0, bmpImage.height - (mCameraPreview.width * bmpImage.width / mCameraPreview.height), bmpImage.width,
+//                    mCameraPreview.width * bmpImage.width / mCameraPreview.height, null, true
+//                )
                 bmpImage = Bitmap.createBitmap(
-                    bmpImage, 0, bmpImage.height - (mCameraPreview.width * bmpImage.width / mCameraPreview.height), bmpImage.width,
-                    mCameraPreview.width * bmpImage.width / mCameraPreview.height, null, true
+                    bmpImage, 0, 0, bmpImage.width,
+                    bmpImage.height, null, true
                 )
 
             val outStream = ByteArrayOutputStream()
@@ -160,15 +143,6 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
             val fo = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile))
             fo.write(outStream.toByteArray())
             fo.close()
-            val outStream1 = ByteArrayOutputStream()
-            bmpImage1.compress(Bitmap.CompressFormat.JPEG, 100, outStream1)
-            val imageFile1 = File(externalMediaDirs.get(0).absolutePath)
-            if (!imageFile1.exists())
-                imageFile1.mkdirs()
-            val fo1 = FileOutputStream(File.createTempFile("mcga_", ".jpeg", imageFile1))
-            fo1.write(outStream1.toByteArray())
-            fo1.close()
-
             initGalleryThumbnail()
         }
         mCamera!!.startPreview()
@@ -312,6 +286,25 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
 
     }
 
+    private fun checkPermissionsGranted() {
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED)
+            TedPermission.with(this)
+                .setPermissionListener(this)
+                .setPermissions(Manifest.permission.CAMERA)
+                .check()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED)
+            TedPermission.with(this)
+                .setPermissionListener(this)
+                .setPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
+                .check()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED)
+            TedPermission.with(this)
+                .setPermissionListener(this)
+                .setPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                .check()
+    }
+
     override fun onPermissionGranted() {
         if (ContextCompat.checkSelfPermission(
                 this,
@@ -322,6 +315,42 @@ class MainActivity : AppCompatActivity(), PermissionListener, SensorEventListene
     }
 
     override fun onPermissionDenied(deniedPermissions: MutableList<String>?) {
+    }
+
+    fun initRatioAdapter(header : String) {
+        val ratioTitle : ArrayList<String> = ArrayList()
+        ratioTitle.add(header)
+        val ratioMap : HashMap<String, ArrayList<String>> = HashMap()
+        val ratioList : ArrayList<String> = ArrayList()
+        ratioList.addAll(arrayListOf(RatioValues.WIDESCREEN.ratio, RatioValues.R_16_9.ratio, RatioValues.R_4_3.ratio))
+        ratioList.remove(header)
+        ratioMap.put(ratioTitle.get(0), ratioList)
+
+        ratioListAdapter = CustomExpandableListAdapter(this, ratioTitle, ratioMap)
+        mChangeRatioList.setAdapter(ratioListAdapter)
+        mChangeRatioList.deferNotifyDataSetChanged()
+    }
+
+    val expandableListChildClickListener = ExpandableListView.OnChildClickListener { parent, v, groupPosition, childPosition, id ->
+        val groupName = ratioListAdapter.getGroup(groupPosition) as String
+        val childName = ratioListAdapter.getChild(groupPosition, childPosition) as String
+        if (!childName.equals(groupName)) {
+            initRatioAdapter(childName)
+            selectedRatio = childName
+
+            if (mCamera != null)
+                mCamera!!.stopPreview()
+            when(selectedRatio) {
+                RatioValues.WIDESCREEN.ratio -> setupCameraLayout(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+                RatioValues.R_16_9.ratio -> setupCameraLayout(resources.displayMetrics.widthPixels, (resources.displayMetrics.widthPixels * 1.7777).toInt())
+                RatioValues.R_4_3.ratio -> setupCameraLayout(resources.displayMetrics.widthPixels, (resources.displayMetrics.widthPixels * 1.3333).toInt())
+            }
+
+            mCameraPreview.mPreviewSize = null
+            if (mCamera!=null)
+                mCamera!!.startPreview()
+        }
+        return@OnChildClickListener true
     }
 
 }

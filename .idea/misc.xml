@@ -3,10 +3,11 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
+        <entry key="..\:/Users/Michael/.gradle/caches/transforms-3/328b627ab3e2a135a6d4ec73049f3ec3/transformed/appcompat-1.1.0/res/layout/support_simple_spinner_dropdown_item.xml" value="0.27447916666666666" />
         <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/drawable/button_round.xml" value="0.290625" />
         <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/drawable/ic_circle.xml" value="0.290625" />
         <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/layout-land/activity_main.xml" value="0.23236331569664903" />
-        <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/layout/activity_main.xml" value="0.4578627280625543" />
+        <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/layout/activity_main.xml" value="0.536" />
         <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/layout/content_main.xml" value="0.27447916666666666" />
         <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/layout/fragment_second.xml" value="0.27447916666666666" />
         <entry key="..\:/Users/Michael/AndroidStudioProjects/MakingCameraGreatAgain/app/src/main/res/layout/round_imageview.xml" value="0.1" />

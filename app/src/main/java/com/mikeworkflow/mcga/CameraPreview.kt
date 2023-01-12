@@ -13,6 +13,7 @@ class CameraPreview(context: Context, camera: Camera, private val mainActivity: 
     private var mCamera: Camera = camera
     private var mHolder = holder
     private var mSupportedPreviewSizes = camera.parameters.supportedPreviewSizes
+    var mPreviewSize : Camera.Size? = null
 
     init {
         mHolder.addCallback(this)
@@ -36,14 +37,27 @@ class CameraPreview(context: Context, camera: Camera, private val mainActivity: 
         }
 
         try {
+
             mCamera.parameters.focusMode = Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO
-            mCamera.parameters.previewSize.width = mainActivity.mPreviewSize!!.width
-            mCamera.parameters.previewSize.height = mainActivity.mPreviewSize!!.height
+            when (mainActivity.selectedRatio) {
+                (RatioValues.WIDESCREEN.ratio) -> if (mPreviewSize!!.height/mPreviewSize!!.width > 1.9) {
+                    mCamera.parameters.previewSize.width = mPreviewSize!!.height
+                    mCamera.parameters.previewSize.height = mPreviewSize!!.width
+                }
+                (RatioValues.R_16_9.ratio) -> if (mPreviewSize!!.height/mPreviewSize!!.width > 1.7) {
+                    mCamera.parameters.previewSize.width = mPreviewSize!!.height
+                    mCamera.parameters.previewSize.height = mPreviewSize!!.width
+                }
+                (RatioValues.R_4_3.ratio) -> if (mPreviewSize!!.height/mPreviewSize!!.width > 1.3) {
+                    mCamera.parameters.previewSize.width = mPreviewSize!!.height
+                    mCamera.parameters.previewSize.height = mPreviewSize!!.width
+                }
+            }
             mCamera.parameters.zoom = 0
             mCamera.parameters.jpegQuality = 100
-
-            mCamera.setPreviewDisplay(mHolder)
             mCamera.setDisplayOrientation(90)
+            mCamera.setPreviewDisplay(mHolder)
+
             mCamera.startPreview()
 
         } catch (e: Exception) {
@@ -53,54 +67,72 @@ class CameraPreview(context: Context, camera: Camera, private val mainActivity: 
     override fun surfaceDestroyed(holder: SurfaceHolder) {}
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-
+        var width : Double
+        var height : Double
         val dm: DisplayMetrics = resources.displayMetrics
-        var width = dm.widthPixels.toDouble()
-        var height = dm.heightPixels.toDouble()
-        val cl: RelativeLayout =
-            mainActivity.findViewById(R.id.main_activity_layout) as RelativeLayout
-        if (cl.measuredHeight > height)
-            height = cl.measuredHeight.toDouble()
-        if (cl.measuredWidth > width)
-            width = cl.measuredWidth.toDouble()
-        if (mSupportedPreviewSizes == null) return
+        width = dm.widthPixels.toDouble()
+        height = dm.heightPixels.toDouble()
 
-        if (mainActivity.mPreviewSize == null) {
-            var optimalSize: Camera.Size? = null
-            var deltaH: Double = Double.MAX_VALUE
-            var deltaW: Double = Double.MAX_VALUE
-            for (size in mSupportedPreviewSizes)
-                if (height - size.width < deltaW && width - size.height < deltaH) {
-                    optimalSize = size
-                    deltaW = height - size.width
-                    deltaH = width - size.height
-                }
-            mainActivity.mPreviewSize = optimalSize!!
-
-            if (deltaH > deltaW) {
-                mainActivity.mPreviewSize!!.width = width.toInt()
-                mainActivity.mPreviewSize!!.height =
-                    (height * width / mainActivity.mPreviewSize!!.height).toInt()
-            } else {
-                mainActivity.mPreviewSize!!.width =
-                    (width * height / mainActivity.mPreviewSize!!.width).toInt()
-                mainActivity.mPreviewSize!!.height = height.toInt()
+        when(mainActivity.selectedRatio) {
+            (RatioValues.WIDESCREEN.ratio) -> {
+                val cl: RelativeLayout =
+                    mainActivity.findViewById(R.id.main_activity_layout) as RelativeLayout
+                if (cl.measuredHeight > height)
+                    height = cl.measuredHeight.toDouble()
+                if (cl.measuredWidth > width)
+                    width = cl.measuredWidth.toDouble()
             }
-
-
-        } else if (height > mainActivity.mPreviewSize!!.height) {
-            mainActivity.mPreviewSize!!.height = height.toInt()
-            mainActivity.mPreviewSize!!.width =
-                (mainActivity.mPreviewSize!!.width * (height / mainActivity.mPreviewSize!!.height)).toInt()
+            (RatioValues.R_16_9.ratio) -> height = width * 1.777
+            (RatioValues.R_4_3.ratio) -> height = width * 1.333
         }
-        setMeasuredDimension(
-            mainActivity.mPreviewSize!!.width,
-            mainActivity.mPreviewSize!!.height
-        )
 
-        mainActivity.setupCameraLayout(
-            mainActivity.mPreviewSize!!.width,
-            mainActivity.mPreviewSize!!.height
+        if (mSupportedPreviewSizes == null) return
+//      temporary switch to 3:4 ratio only
+//        if (mPreviewSize == null) {
+//            var optimalSize: Camera.Size? = null
+//            var deltaH: Double = Double.MAX_VALUE
+//            var deltaW: Double = Double.MAX_VALUE
+//            val targetRatio = height/width
+//            val ratioDiv = 0.01
+//            for (size in mSupportedPreviewSizes)
+////                if (height - size.width < deltaW && width - size.height < deltaH) {
+////                    optimalSize = size
+////                    deltaW = height - size.width
+////                    deltaH = width - size.height
+////                }
+//            if (size.width/size.height - targetRatio < ratioDiv) {
+//                if (optimalSize == null)
+//                    optimalSize = size
+//                if (height - size.width < deltaW && width - size.height < deltaH) {
+//                    optimalSize = size
+//                    deltaW = height - size.width
+//                    deltaH = width - size.height
+//                }
+//            }
+//
+//            mPreviewSize = optimalSize!!
+//
+//            if (deltaH > deltaW) {
+//                mPreviewSize!!.width = width.toInt()
+//                mPreviewSize!!.height =
+//                    (height * width / mPreviewSize!!.height).toInt()
+//            } else {
+//                mPreviewSize!!.width =
+//                    (width * height / mPreviewSize!!.width).toInt()
+//                mPreviewSize!!.height = height.toInt()
+//            }
+//
+//        } else if (height/width > 1.9 && height > mPreviewSize!!.height) {
+//            mPreviewSize!!.height = height.toInt()
+//            mPreviewSize!!.width =
+//                (mPreviewSize!!.width * (height / mPreviewSize!!.height)).toInt()
+//        }
+        mPreviewSize = mSupportedPreviewSizes[0]
+        mPreviewSize!!.width = width.toInt()
+        mPreviewSize!!.height = (width * 1.34).toInt()
+        setMeasuredDimension(
+            mPreviewSize!!.width,
+            mPreviewSize!!.height
         )
     }
 }
